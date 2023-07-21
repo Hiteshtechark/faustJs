@@ -1,91 +1,84 @@
-import { gql } from '@apollo/client';
-import * as MENUS from '../constants/menus';
-import { BlogInfoFragment } from '../fragments/GeneralSettings';
-import {
-  Header,
-  Footer,
-  Main,
-  Container,
-  ContentWrapper,
-  EntryHeader,
-  NavigationMenu,
-  FeaturedImage,
-  SEO,
-} from '../components';
+import { useQuery, gql } from "@apollo/client";
+import Link from "next/link";
 
-export default function Component(props) {
-  // Loading state for previews
-  if (props.loading) {
-    return <>Loading...</>;
-  }
-
-  const { title: siteTitle, description: siteDescription } =
-    props?.data?.generalSettings;
-  const primaryMenu = props?.data?.headerMenuItems?.nodes ?? [];
-  const footerMenu = props?.data?.footerMenuItems?.nodes ?? [];
-  const { title, content, featuredImage } = props?.data?.page ?? { title: '' };
-
-  return (
-    <>
-      <SEO
-        title={siteTitle}
-        description={siteDescription}
-        imageUrl={featuredImage?.node?.sourceUrl}
-      />
-      <Header
-        title={siteTitle}
-        description={siteDescription}
-        menuItems={primaryMenu}
-      />
-      <Main>
-        <>
-          <EntryHeader title={title} image={featuredImage?.node} />
-          <Container>
-            <ContentWrapper content={content} />
-          </Container>
-        </>
-      </Main>
-      <Footer title={siteTitle} menuItems={footerMenu} />
-    </>
-  );
-}
-
-Component.variables = ({ databaseId }, ctx) => {
-  return {
-    databaseId,
-    headerLocation: MENUS.PRIMARY_LOCATION,
-    footerLocation: MENUS.FOOTER_LOCATION,
-    asPreview: ctx?.asPreview,
-  };
-};
-
-Component.query = gql`
-  ${BlogInfoFragment}
-  ${NavigationMenu.fragments.entry}
-  ${FeaturedImage.fragments.entry}
-  query GetPageData(
-    $databaseId: ID!
-    $headerLocation: MenuLocationEnum
-    $footerLocation: MenuLocationEnum
-    $asPreview: Boolean = false
-  ) {
-    page(id: $databaseId, idType: DATABASE_ID, asPreview: $asPreview) {
-      title
-      content
-      ...FeaturedImageFragment
-    }
-    generalSettings {
-      ...BlogInfoFragment
-    }
-    footerMenuItems: menuItems(where: { location: $footerLocation }) {
-      nodes {
-        ...NavigationMenuItemFragment
+const GET_POSTS = gql`
+  query getPosts($first: Int!, $after: String) {
+    posts(first: $first, after: $after) {
+      pageInfo {
+        hasNextPage
+        endCursor
       }
-    }
-    headerMenuItems: menuItems(where: { location: $headerLocation }) {
-      nodes {
-        ...NavigationMenuItemFragment
+      edges {
+        node {
+          id
+          databaseId
+          title
+          slug
+        }
       }
     }
   }
 `;
+
+const BATCH_SIZE = 2;
+
+export default function LoadMorePost() {
+  const { data, loading, error, fetchMore } = useQuery(GET_POSTS, {
+    variables: { first: BATCH_SIZE, after: null },
+    notifyOnNetworkStatusChange: true,
+  });
+
+  if (error) {
+    return <p>Sorry, an error happened. Reload Please</p>;
+  }
+
+  if (!data && loading) {
+    return <p>Loading...</p>;
+  }
+
+  if (!data?.posts.edges.length) {
+    return <p>no posts have been published</p>;
+  }
+
+  const posts = data.posts.edges.map((edge) => edge.node);
+  const haveMorePosts = Boolean(data?.posts?.pageInfo?.hasNextPage);
+
+  return (
+    <>
+      <ul style={{ padding: "0" }}>
+        {posts.map((post) => {
+          const { databaseId, title, slug } = post;
+          return (
+            <li
+              key={databaseId}
+              style={{
+                border: "2px solid #ededed",
+                borderRadius: "10px",
+                padding: "2rem",
+                listStyle: "none",
+                marginBottom: "1rem",
+              }}
+            >
+              <Link href={`/${slug}`}>{title}</Link>
+            </li>
+          );
+        })}
+      </ul>
+      {haveMorePosts ? (
+        <form
+          method="post"
+          onSubmit={(event) => {
+            event.preventDefault();
+            fetchMore({ variables: { after: data.posts.pageInfo.endCursor } });
+          }}
+        >
+          <button type="submit" disabled={loading}>
+            {loading ? "Loading..." : "Load more"}
+          </button>
+        </form>
+      ) : (
+        <p>✅ All posts loaded.</p>
+      )}
+    </>
+  );
+}
