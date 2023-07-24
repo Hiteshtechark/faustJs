@@ -8,8 +8,8 @@ function getOffsetFromPageNumber(pageNumber) {
   return pageNumber === 1 ? 0 : (pageNumber - 1) * POSTS_PER_PAGE;
 }
 
-export default function Pagination(props) {
- 
+export default function Page(props) {
+
   const { data } = useQuery(Page.query, {
     variables: {
       postsPerPage: POSTS_PER_PAGE,
@@ -38,8 +38,10 @@ export default function Pagination(props) {
 
           return (
             <li key={i}>
-              <Link key={i} href={`/blog/page/${pageNum}`}>
-                page {pageNum}
+              <Link key={i} href={`/blog/${pageNum}`}>
+                <a>
+                  page {pageNum}
+                </a>
               </Link>
             </li>
           );
@@ -80,7 +82,7 @@ Page.variables = ({ params }) => {
 };
 
 export function getStaticProps(ctx) {
-  
+
   return getNextStaticProps(ctx, {
     Page,
     props: {
